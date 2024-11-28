@@ -80,6 +80,33 @@ namespace RockPaperScissors
             return items[fallback.Next(items.Count)].Name;
         }
     }
+    private int GetValidInt(string prompt)
+{
+    while (true)
+    {
+        Console.Write(prompt);
+        if (int.TryParse(Console.ReadLine(), out int result) && result > 0)
+        {
+            return result;
+        }
+        Console.WriteLine("Invalid input. Please enter a positive number.");
+    }
+}
+
+private string GetValidDifficulty()
+{
+    while (true)
+    {
+        Console.Write("Choose difficulty (easy/hard): ");
+        string difficulty = Console.ReadLine()?.ToLower();
+        if (difficulty == "easy" || difficulty == "hard")
+        {
+            return difficulty;
+        }
+        Console.WriteLine("Invalid difficulty. Please enter 'easy' or 'hard'.");
+    }
+}
+
 
     // Класс для игры
     public class Game
@@ -151,31 +178,30 @@ namespace RockPaperScissors
         }
 
         private void PlayTournament()
-        {
-            Console.Write("Enter the number of rounds: ");
-            int rounds = int.Parse(Console.ReadLine());
-            int playerScore = 0;
-            int botScore = 0;
+{
+    int rounds = GetValidInt("Enter the number of rounds: ");
+    string difficulty = GetValidDifficulty();
+    bot = new Bot(difficulty);
 
-            Console.WriteLine("Choose difficulty (easy/hard):");
-            string difficulty = Console.ReadLine()?.ToLower();
-            bot = new Bot(difficulty);
+    int playerScore = 0;
+    int botScore = 0;
 
-            for (int i = 1; i <= rounds || playerScore == botScore; i++)
-            {
-                Console.WriteLine($"\nRound {i}");
-                string result = PlayRound();
+    for (int i = 1; i <= rounds || playerScore == botScore; i++)
+    {
+        Console.WriteLine($"\nRound {i}");
+        string result = PlayRound();
 
-                if (result == "win") playerScore++;
-                else if (result == "lose") botScore++;
+        if (result == "win") playerScore++;
+        else if (result == "lose") botScore++;
 
-                Console.WriteLine($"Score: Player {playerScore} - Bot {botScore}");
-            }
+        Console.WriteLine($"Score: Player {playerScore} - Bot {botScore}");
+    }
 
-            Console.WriteLine(playerScore > botScore
-                ? "Congratulations! You won the tournament!"
-                : "You lost the tournament. Better luck next time!");
-        }
+    Console.WriteLine(playerScore > botScore
+        ? "Congratulations! You won the tournament!"
+        : "You lost the tournament. Better luck next time!");
+}
+
 
         private string PlayRound()
         {
@@ -220,26 +246,78 @@ namespace RockPaperScissors
 
         private void AddNewItem()
         {
-            Console.Write("Enter the name of the new item: ");
-            string newItemName = Console.ReadLine();
+          Console.Write("Enter the name of the new item: ");
+          string newItemName = Console.ReadLine().Trim();
 
-            var newItem = new Item(newItemName);
-            Console.WriteLine("Enter the items this item defeats (comma-separated):");
-            string wins = Console.ReadLine();
-            foreach (var win in wins.Split(','))
-            {
-                newItem.AddWin(win.Trim());
-            }
+          // Проверка: существует ли предмет
+          if (items.Exists(item => item.Name.Equals(newItemName, StringComparison.OrdinalIgnoreCase)))
+           {
+             Console.WriteLine("This item already exists in the game.");
+             return;
+           }
 
-            Console.WriteLine("Enter the items this item loses to (comma-separated):");
-            string losses = Console.ReadLine();
-            foreach (var loss in losses.Split(','))
-            {
-                newItem.AddLoss(loss.Trim());
-            }
+    var newItem = new Item(newItemName);
 
-            items.Add(newItem);
-            Console.WriteLine($"{newItemName} has been added to the game!");
+    Console.WriteLine("Enter the items this item defeats (comma-separated):");
+    string wins = Console.ReadLine();
+    foreach (var win in wins.Split(','))
+    {
+        string trimmedWin = win.Trim();
+        // Проверка: нет ли повторяющихся предметов
+        if (!string.IsNullOrEmpty(trimmedWin) && !newItem.WinsAgainst.Contains(trimmedWin) &&
+            !trimmedWin.Equals(newItemName, StringComparison.OrdinalIgnoreCase))
+        {
+            newItem.AddWin(trimmedWin);
+        }
+    }
+
+    Console.WriteLine("Enter the items this item loses to (comma-separated):");
+    string losses = Console.ReadLine();
+    foreach (var loss in losses.Split(','))
+    {
+        string trimmedLoss = loss.Trim();
+        // Проверка: нет ли повторяющихся предметов
+        if (!string.IsNullOrEmpty(trimmedLoss) && !newItem.LosesTo.Contains(trimmedLoss) &&
+            !trimmedLoss.Equals(newItemName, StringComparison.OrdinalIgnoreCase))
+        {
+            newItem.AddLoss(trimmedLoss);
+        }
+    }
+
+    // Проверка: пересечение в списках побед/поражений
+    foreach (var win in newItem.WinsAgainst)
+    {
+        if (newItem.LosesTo.Contains(win))
+        {
+            Console.WriteLine($"Conflict detected: {win} is both a win and a loss for {newItemName}. Item not added.");
+            return;
+        }
+    }
+
+    items.Add(newItem);
+    SaveGameData();
+    Console.WriteLine($"{newItemName} has been added to the game and saved!");
+}
+
+// Удаление предметов
+private void RemoveItem()
+{
+    Console.WriteLine("Enter the name of the item you want to remove:");
+    string itemName = Console.ReadLine().Trim();
+
+    var itemToRemove = items.Find(item => item.Name.Equals(itemName, StringComparison.OrdinalIgnoreCase));
+    if (itemToRemove == null)
+    {
+        Console.WriteLine("Item not found.");
+        return;
+    }
+
+    items.Remove(itemToRemove);
+    SaveGameData();
+    Console.WriteLine($"{itemName} has been removed from the game.");
+}
+
+            
         }
 
         private void SaveGameData()
