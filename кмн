@@ -1,0 +1,295 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+
+namespace RockPaperScissors
+{
+    // Класс для предметов
+    public class Item
+    {
+        public string Name { get; }
+        public List<string> WinsAgainst { get; }
+        public List<string> LosesTo { get; }
+
+        public Item(string name)
+        {
+            Name = name;
+            WinsAgainst = new List<string>();
+            LosesTo = new List<string>();
+        }
+
+        public void AddWin(string item) => WinsAgainst.Add(item);
+        public void AddLoss(string item) => LosesTo.Add(item);
+
+        public string GetResult(string opponent)
+        {
+            if (WinsAgainst.Contains(opponent)) return "win";
+            if (LosesTo.Contains(opponent)) return "lose";
+            return "draw";
+        }
+    }
+
+    // Класс для игрока
+    public class Player
+    {
+        public string Name { get; set; }
+        public int Wins { get; set; }
+        public int Losses { get; set; }
+
+        public Player(string name)
+        {
+            Name = name;
+            Wins = 0;
+            Losses = 0;
+        }
+    }
+
+    // Класс для бота
+    public class Bot
+    {
+        public string Difficulty { get; }
+        private string LastMove;
+
+        public Bot(string difficulty)
+        {
+            Difficulty = difficulty;
+            LastMove = null;
+        }
+
+        public string MakeMove(List<Item> items, string playerLastMove = null)
+        {
+            if (Difficulty == "easy")
+            {
+                Random random = new Random();
+                return items[random.Next(items.Count)].Name;
+            }
+            else if (Difficulty == "hard" && playerLastMove != null)
+            {
+                foreach (var item in items)
+                {
+                    if (item.WinsAgainst.Contains(playerLastMove))
+                    {
+                        LastMove = item.Name;
+                        return LastMove;
+                    }
+                }
+            }
+
+            // Фолбэк на случай, если бот не может определить ход
+            Random fallback = new Random();
+            return items[fallback.Next(items.Count)].Name;
+        }
+    }
+
+    // Класс для игры
+    public class Game
+    {
+        private Player player;
+        private Bot bot;
+        private List<Item> items;
+        private string filePath = "game_data.txt";
+
+        public Game()
+        {
+            items = new List<Item>
+            {
+                new Item("Rock") { WinsAgainst = { "Scissors" }, LosesTo = { "Paper" } },
+                new Item("Paper") { WinsAgainst = { "Rock" }, LosesTo = { "Scissors" } },
+                new Item("Scissors") { WinsAgainst = { "Paper" }, LosesTo = { "Rock" } }
+            };
+        }
+
+        public void MainMenu()
+        {
+            Console.WriteLine("Welcome to Rock, Paper, Scissors!");
+            LoadGameData();
+
+            Console.WriteLine("Enter your name:");
+            string name = Console.ReadLine();
+            player = new Player(name);
+
+            while (true)
+            {
+                Console.WriteLine("\nMain Menu:");
+                Console.WriteLine("1. Play Single Game");
+                Console.WriteLine("2. Play Tournament");
+                Console.WriteLine("3. Add New Item");
+                Console.WriteLine("4. Exit");
+                Console.Write("Choose an option: ");
+                string choice = Console.ReadLine();
+
+                switch (choice)
+                {
+                    case "1":
+                        PlaySingleGame();
+                        break;
+                    case "2":
+                        PlayTournament();
+                        break;
+                    case "3":
+                        AddNewItem();
+                        break;
+                    case "4":
+                        SaveGameData();
+                        Console.WriteLine("Goodbye!");
+                        return;
+                    default:
+                        Console.WriteLine("Invalid choice. Please try again.");
+                        break;
+                }
+            }
+        }
+
+        private void PlaySingleGame()
+        {
+            Console.WriteLine("Choose difficulty (easy/hard):");
+            string difficulty = Console.ReadLine()?.ToLower();
+            bot = new Bot(difficulty);
+
+            string result = PlayRound();
+            Console.WriteLine($"Result: {result}");
+        }
+
+        private void PlayTournament()
+        {
+            Console.Write("Enter the number of rounds: ");
+            int rounds = int.Parse(Console.ReadLine());
+            int playerScore = 0;
+            int botScore = 0;
+
+            Console.WriteLine("Choose difficulty (easy/hard):");
+            string difficulty = Console.ReadLine()?.ToLower();
+            bot = new Bot(difficulty);
+
+            for (int i = 1; i <= rounds || playerScore == botScore; i++)
+            {
+                Console.WriteLine($"\nRound {i}");
+                string result = PlayRound();
+
+                if (result == "win") playerScore++;
+                else if (result == "lose") botScore++;
+
+                Console.WriteLine($"Score: Player {playerScore} - Bot {botScore}");
+            }
+
+            Console.WriteLine(playerScore > botScore
+                ? "Congratulations! You won the tournament!"
+                : "You lost the tournament. Better luck next time!");
+        }
+
+        private string PlayRound()
+        {
+            Console.WriteLine("Available items:");
+            foreach (var item in items)
+            {
+                Console.WriteLine($"- {item.Name}");
+            }
+
+            Console.Write("Enter your move: ");
+            string playerMove = Console.ReadLine();
+
+            string botMove = bot.MakeMove(items, playerMove);
+            Console.WriteLine($"Bot chose: {botMove}");
+
+            var playerItem = items.Find(item => item.Name.Equals(playerMove, StringComparison.OrdinalIgnoreCase));
+            if (playerItem == null)
+            {
+                Console.WriteLine("Invalid move! Try again.");
+                return PlayRound();
+            }
+
+            string result = playerItem.GetResult(botMove);
+
+            switch (result)
+            {
+                case "win":
+                    Console.WriteLine("You win!");
+                    player.Wins++;
+                    break;
+                case "lose":
+                    Console.WriteLine("You lose!");
+                    player.Losses++;
+                    break;
+                case "draw":
+                    Console.WriteLine("It's a draw!");
+                    break;
+            }
+
+            return result;
+        }
+
+        private void AddNewItem()
+        {
+            Console.Write("Enter the name of the new item: ");
+            string newItemName = Console.ReadLine();
+
+            var newItem = new Item(newItemName);
+            Console.WriteLine("Enter the items this item defeats (comma-separated):");
+            string wins = Console.ReadLine();
+            foreach (var win in wins.Split(','))
+            {
+                newItem.AddWin(win.Trim());
+            }
+
+            Console.WriteLine("Enter the items this item loses to (comma-separated):");
+            string losses = Console.ReadLine();
+            foreach (var loss in losses.Split(','))
+            {
+                newItem.AddLoss(loss.Trim());
+            }
+
+            items.Add(newItem);
+            Console.WriteLine($"{newItemName} has been added to the game!");
+        }
+
+        private void SaveGameData()
+        {
+            using (StreamWriter writer = new StreamWriter(filePath))
+            {
+                writer.WriteLine(player.Name);
+                writer.WriteLine(player.Wins);
+                writer.WriteLine(player.Losses);
+                foreach (var item in items)
+                {
+                    writer.WriteLine($"{item.Name}:{string.Join(",", item.WinsAgainst)}:{string.Join(",", item.LosesTo)}");
+                }
+            }
+        }
+
+        private void LoadGameData()
+        {
+            if (!File.Exists(filePath)) return;
+
+            using (StreamReader reader = new StreamReader(filePath))
+            {
+                string name = reader.ReadLine();
+                int wins = int.Parse(reader.ReadLine());
+                int losses = int.Parse(reader.ReadLine());
+
+                player = new Player(name) { Wins = wins, Losses = losses };
+
+                items.Clear();
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    var parts = line.Split(':');
+                    var item = new Item(parts[0])
+                    {
+                        WinsAgainst = new List<string>(parts[1].Split(',')),
+                        LosesTo = new List<string>(parts[2].Split(','))
+                    };
+                    items.Add(item);
+                }
+            }
+        }
+    }
+
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Game game = new Game();
+            game.MainMenu();
+        }
+    }
+}
