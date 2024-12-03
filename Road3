@@ -1,0 +1,195 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+
+class Program
+{
+    const int MapHeight = 25;
+    const int RoadWidth = 5;
+    const int RoadPosition = 10;
+    const int ViewWidth = 50;
+    const int HungerDecreaseRate = 1;
+    const int ThirstDecreaseRate = 1;
+
+    static int playerX = 0;
+    static int playerY = RoadPosition + RoadWidth / 2;
+    static int hunger = 100;
+    static int thirst = 100;
+    static List<string> inventory = new List<string>();
+
+    static Random random = new Random();
+
+    static List<char[,]> mapSegments = new List<char[,]>();
+
+    static void GenerateInitialSegments()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            mapSegments.Add(GenerateMapSegment());
+        }
+    }
+
+    static char[,] GenerateMapSegment()
+    {
+        char[,] mapSegment = new char[MapHeight, ViewWidth];
+
+        for (int y = 0; y < MapHeight; y++)
+        {
+            for (int x = 0; x < ViewWidth; x++)
+            {
+                if (y < RoadPosition || y >= RoadPosition + RoadWidth)
+                {
+                    mapSegment[y, x] = '0'; // Обочины
+                }
+                else
+                {
+                    mapSegment[y, x] = '-'; // Дорога
+                }
+            }
+        }
+
+        // Генерация зданий
+        for (int i = 0; i < 3; i++)
+        {
+            int buildingHeight = random.Next(2, 6);
+            int buildingWidth = random.Next(5, 10);
+            int buildingX = random.Next(5, ViewWidth - 10);
+            int buildingY = random.Next(0, 2) == 0 ? 0 : RoadPosition + RoadWidth;
+
+            for (int y = buildingY; y < buildingY + buildingHeight && y < MapHeight; y++)
+            {
+                for (int x = buildingX; x < buildingX + buildingWidth && x < ViewWidth; x++)
+                {
+                    if (y == buildingY && x == buildingX + buildingWidth / 2)
+                    {
+                        mapSegment[y, x] = '^'; // Дверь
+                    }
+                    else
+                    {
+                        mapSegment[y, x] = '*'; // Стены
+                    }
+                }
+            }
+        }
+
+        return mapSegment;
+    }
+
+    static void DrawMap()
+    {
+        Console.Clear();
+        int segmentIndex = playerX / ViewWidth;
+        int localX = playerX % ViewWidth;
+
+        // Определяем видимую область карты
+        int startX = playerX >= ViewWidth / 2 ? playerX - ViewWidth / 2 : 0;
+        int endX = startX + ViewWidth;
+
+        for (int y = 0; y < MapHeight; y++)
+        {
+            for (int x = startX; x < endX; x++)
+            {
+                int segmentIdx = x / ViewWidth;
+                int localIdx = x % ViewWidth;
+
+                if (segmentIdx < mapSegments.Count)
+                {
+                    if (x == playerX && y == playerY)
+                    {
+                        Console.Write('@'); // Игрок
+                    }
+                    else
+                    {
+                        Console.Write(mapSegments[segmentIdx][y, localIdx]);
+                    }
+                }
+                else
+                {
+                    Console.Write(' '); // Пустое пространство
+                }
+            }
+            Console.WriteLine();
+        }
+
+        Console.WriteLine($"Hunger: {hunger}, Thirst: {thirst}");
+        Console.WriteLine("Inventory: " + (inventory.Count > 0 ? string.Join(", ", inventory) : "Empty"));
+        Console.WriteLine("Controls: Arrow keys to move, S to save, U to use item");
+    }
+
+    static void MovePlayer(ConsoleKey key)
+    {
+        int segmentIndex = playerX / ViewWidth;
+        int localX = playerX % ViewWidth;
+
+        if (key == ConsoleKey.UpArrow && playerY > RoadPosition && (mapSegments[segmentIndex][playerY - 1, localX] == '-' || mapSegments[segmentIndex][playerY - 1, localX] == '^'))
+            playerY--;
+        else if (key == ConsoleKey.DownArrow && playerY < RoadPosition + RoadWidth - 1 && (mapSegments[segmentIndex][playerY + 1, localX] == '-' || mapSegments[segmentIndex][playerY + 1, localX] == '^'))
+            playerY++;
+        else if (key == ConsoleKey.LeftArrow && playerX > 0)
+            playerX--;
+        else if (key == ConsoleKey.RightArrow)
+        {
+            playerX++;
+            if (playerX % ViewWidth == 0 && playerX / ViewWidth == mapSegments.Count)
+            {
+                mapSegments.Add(GenerateMapSegment());
+            }
+        }
+
+        // Взаимодействие с дверью
+        if (mapSegments[segmentIndex][playerY, localX] == '^')
+        {
+            Interact();
+        }
+    }
+
+    static void Interact()
+    {
+        string[] loot = { "Food", "Water", "Pistol", "Rifle", "Ammo", "Gasoline" };
+        string item = loot[random.Next(loot.Length)];
+        inventory.Add(item);
+        Console.WriteLine($"You found: {item}");
+    }
+
+    static void SaveGame()
+    {
+        using (StreamWriter writer = new StreamWriter("savegame.txt"))
+        {
+            writer.WriteLine(playerX);
+            writer.WriteLine(playerY);
+            writer.WriteLine(hunger);
+            writer.WriteLine(thirst);
+            writer.WriteLine(string.Join(",", inventory));
+        }
+        Console.WriteLine("Game saved!");
+    }
+
+    static void Main()
+    {
+        GenerateInitialSegments();
+
+        while (true)
+        {
+            DrawMap();
+
+            ConsoleKey key = Console.ReadKey(true).Key;
+
+            if (key == ConsoleKey.S)
+            {
+                SaveGame();
+            }
+            else
+            {
+                MovePlayer(key);
+                hunger = Math.Max(0, hunger - HungerDecreaseRate);
+                thirst = Math.Max(0, thirst - ThirstDecreaseRate);
+
+                if (hunger == 0 || thirst == 0)
+                {
+                    Console.WriteLine("You died of hunger or thirst!");
+                    break;
+                }
+            }
+        }
+    }
+}
