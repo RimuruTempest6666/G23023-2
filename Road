@@ -1,0 +1,204 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+
+class Program
+{
+    const int MapHeight = 25;
+    const int RoadWidth = 5;
+    const int RoadPosition = 10;
+    const int ViewWidth = 50;
+    const int HungerDecreaseRate = 1;
+    const int ThirstDecreaseRate = 1;
+
+    static int playerX = 0;
+    static int playerY = RoadPosition + RoadWidth / 2;
+    static int hunger = 100;
+    static int thirst = 100;
+    static List<string> inventory = new List<string>();
+
+    static Random random = new Random();
+
+    static char[,] GenerateMapSegment()
+    {
+        char[,] mapSegment = new char[MapHeight, ViewWidth];
+
+        for (int y = 0; y < MapHeight; y++)
+        {
+            for (int x = 0; x < ViewWidth; x++)
+            {
+                if (y < RoadPosition || y >= RoadPosition + RoadWidth)
+                {
+                    mapSegment[y, x] = '0'; // Обочины
+                }
+                else
+                {
+                    mapSegment[y, x] = '-'; // Дорога
+                }
+            }
+        }
+
+        // Генерация зданий
+        for (int i = 0; i < 3; i++)
+        {
+            int buildingHeight = random.Next(2, 6);
+            int buildingWidth = random.Next(5, 10);
+            int buildingX = random.Next(5, ViewWidth - 10);
+            int buildingY = random.Next(0, 2) == 0 ? 0 : RoadPosition + RoadWidth;
+
+            for (int y = buildingY; y < buildingY + buildingHeight && y < MapHeight; y++)
+            {
+                for (int x = buildingX; x < buildingX + buildingWidth && x < ViewWidth; x++)
+                {
+                    if (y == buildingY && x == buildingX + buildingWidth / 2)
+                    {
+                        mapSegment[y, x] = '^'; // Дверь
+                    }
+                    else
+                    {
+                        mapSegment[y, x] = '*'; // Стены
+                    }
+                }
+            }
+        }
+
+        return mapSegment;
+    }
+
+    static void DrawMap(char[,] mapSegment)
+    {
+        Console.Clear();
+        for (int y = 0; y < MapHeight; y++)
+        {
+            for (int x = 0; x < ViewWidth; x++)
+            {
+                if (x == playerX && y == playerY)
+                {
+                    Console.Write('@'); // Игрок
+                }
+                else
+                {
+                    Console.Write(mapSegment[y, x]);
+                }
+            }
+            Console.WriteLine();
+        }
+
+        Console.WriteLine($"Hunger: {hunger}, Thirst: {thirst}");
+        Console.WriteLine("Inventory: " + (inventory.Count > 0 ? string.Join(", ", inventory) : "Empty"));
+        Console.WriteLine("Controls: Arrow keys to move, S to save, U to use item");
+    }
+
+    static void MovePlayer(ConsoleKey key)
+    {
+        if (key == ConsoleKey.UpArrow && playerY > 0) playerY--;
+        if (key == ConsoleKey.DownArrow && playerY < MapHeight - 1) playerY++;
+        if (key == ConsoleKey.LeftArrow && playerX > 0) playerX--;
+        if (key == ConsoleKey.RightArrow) playerX++;
+    }
+
+    static void Interact(char cell)
+    {
+        if (cell == '^') // Дверь
+        {
+            string[] loot = { "Food", "Water", "Pistol", "Rifle", "Ammo", "Gasoline" };
+            string item = loot[random.Next(loot.Length)];
+            inventory.Add(item);
+            Console.WriteLine($"You found: {item}");
+        }
+    }
+
+    static void UseItem()
+    {
+        if (inventory.Count == 0)
+        {
+            Console.WriteLine("Your inventory is empty!");
+            return;
+        }
+
+        Console.WriteLine("Select an item to use:");
+        for (int i = 0; i < inventory.Count; i++)
+        {
+            Console.WriteLine($"{i + 1}. {inventory[i]}");
+        }
+
+        Console.Write("Enter the number of the item: ");
+        if (int.TryParse(Console.ReadLine(), out int choice) && choice > 0 && choice <= inventory.Count)
+        {
+            string selectedItem = inventory[choice - 1];
+            if (selectedItem == "Food")
+            {
+                hunger = Math.Min(100, hunger + 20);
+                Console.WriteLine("You ate some food and restored hunger.");
+            }
+            else if (selectedItem == "Water")
+            {
+                thirst = Math.Min(100, thirst + 20);
+                Console.WriteLine("You drank some water and restored thirst.");
+            }
+            else
+            {
+                Console.WriteLine($"You can't use {selectedItem} right now.");
+            }
+            inventory.RemoveAt(choice - 1);
+        }
+        else
+        {
+            Console.WriteLine("Invalid choice!");
+        }
+    }
+
+    static void SaveGame()
+    {
+        using (StreamWriter writer = new StreamWriter("savegame.txt"))
+        {
+            writer.WriteLine(playerX);
+            writer.WriteLine(playerY);
+            writer.WriteLine(hunger);
+            writer.WriteLine(thirst);
+            writer.WriteLine(string.Join(",", inventory));
+        }
+        Console.WriteLine("Game saved!");
+    }
+
+    static void Main()
+    {
+        char[,] mapSegment = GenerateMapSegment();
+
+        while (true)
+        {
+            DrawMap(mapSegment);
+
+            ConsoleKey key = Console.ReadKey(true).Key;
+            if (key == ConsoleKey.S)
+            {
+                SaveGame();
+            }
+            else if (key == ConsoleKey.U)
+            {
+                UseItem();
+            }
+            else
+            {
+                MovePlayer(key);
+
+                hunger = Math.Max(0, hunger - HungerDecreaseRate);
+                thirst = Math.Max(0, thirst - ThirstDecreaseRate);
+
+                if (hunger == 0 || thirst == 0)
+                {
+                    Console.WriteLine("You died of hunger or thirst!");
+                    break;
+                }
+
+                char cell = mapSegment[playerY, playerX % ViewWidth];
+                Interact(cell);
+
+                if (playerX % ViewWidth == 0)
+                {
+                    mapSegment = GenerateMapSegment();
+                }
+            }
+        }
+    }
+}
